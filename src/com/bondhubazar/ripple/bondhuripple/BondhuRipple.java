@@ -1,34 +1,469 @@
+
 package com.bondhubazar.ripple.bondhuripple;
 
-import com.google.appinventor.components.annotations.Extension;
-import com.google.appinventor.components.annotations.SimpleFunction;
-import com.google.appinventor.components.runtime.util.YailList;
-import com.google.appinventor.components.runtime.ComponentContainer;
-import com.google.appinventor.components.runtime.errors.YailRuntimeError;
-import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
+// Android Graphics
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 
-@Extension(
-        description = "Extension component for BondhuRipple. Built with <3 and Rush.",
-        icon = "icon.png"
+// Android View
+import android.view.View;
+
+// Java Collection
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// App Inventor Imports
+import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.SimpleFunction;
+import com.google.appinventor.components.annotations.SimpleEvent;
+import com.google.appinventor.components.annotations.SimpleObject;
+import com.google.appinventor.components.annotations.UsesLibraries;
+import com.google.appinventor.components.annotations.UsesPermissions;
+import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
+import com.google.appinventor.components.runtime.AndroidViewComponent;
+import com.google.appinventor.components.runtime.ComponentContainer;
+import com.google.appinventor.components.runtime.EventDispatcher;
+
+
+@DesignerComponent(
+    version = 1,
+    description = "Universal Ripple Effect Extension for Kodular and App Inventor",
+    category = ComponentCategory.EXTENSION,
+    nonVisible = true,
+    iconName = "images/extension.png"
 )
+
+@SimpleObject(external = true)
+
 public class BondhuRipple extends AndroidNonvisibleComponent {
 
-    public BondhuRipple(ComponentContainer container) {
-        super(container.$form());
+    // =====================================
+    // Android Context
+    // =====================================
+
+    private final android.content.Context context;
+
+    // =====================================
+    // Original View State
+    // =====================================
+
+    private static class RippleState {
+
+        Drawable originalBackground;
+
+        boolean originalClickable;
+
+        int paddingLeft;
+        int paddingTop;
+        int paddingRight;
+        int paddingBottom;
     }
 
-    @SimpleFunction(description = "Returns the sum of the given list of integers.")
-    public int SumAll(YailList listOfInts) {
-        int sum = 0;
+    // =====================================
+    // Registered Views
+    // =====================================
 
-        for (final Object o : listOfInts.toArray()) {
-            try {
-                sum += Integer.parseInt(o.toString());
-            } catch (NumberFormatException e) {
-                throw new YailRuntimeError(e.toString(), "NumberFormatException");
+    private final Map<View, RippleState> rippleViews =
+            new WeakHashMap<View, RippleState>();
+
+    // =====================================
+    // Constructor
+    // =====================================
+
+    public BondhuRipple(ComponentContainer container) {
+
+        super(container.$form());
+
+        context = container.$context();
+    }
+
+    // =====================================
+    // 1. Register View
+    // =====================================
+
+    @SimpleFunction(
+        description = "Register a Button or Arrangement for Ripple Effect"
+    )
+
+    public void RegisterView(AndroidViewComponent component) {
+
+        try {
+
+            if (component == null) {
+
+                ErrorOccurred("RegisterView: Component is null");
+                return;
             }
+
+            View view = component.getView();
+
+            if (view == null) {
+
+                ErrorOccurred("RegisterView: View is null");
+                return;
+            }
+
+            if (!rippleViews.containsKey(view)) {
+
+                RippleState state = new RippleState();
+
+                state.originalBackground = view.getBackground();
+
+                state.originalClickable = view.isClickable();
+
+                state.paddingLeft = view.getPaddingLeft();
+                state.paddingTop = view.getPaddingTop();
+                state.paddingRight = view.getPaddingRight();
+                state.paddingBottom = view.getPaddingBottom();
+
+                rippleViews.put(view, state);
+            }
+
+            ViewRegistered("View successfully registered");
+
+        } catch (Exception e) {
+
+            ErrorOccurred("RegisterView: " + e.getMessage());
+        }
+    }
+
+    // =====================================
+    // 2. Set Ripple
+    // =====================================
+
+    @SimpleFunction(
+        description = "Apply Ripple Effect to registered View"
+    )
+
+    public void SetRipple(
+        AndroidViewComponent component,
+        String rippleColor,
+        int cornerRadiusDp
+    ) {
+
+        try {
+
+            if (component == null) {
+
+                ErrorOccurred("SetRipple: Component is null");
+                return;
+            }
+
+            View view = component.getView();
+
+            if (view == null) {
+
+                ErrorOccurred("SetRipple: View is null");
+                return;
+            }
+
+            // View আগে Register না থাকলে Register হবে
+
+            if (!rippleViews.containsKey(view)) {
+
+                RegisterView(component);
+            }
+
+            RippleState state = rippleViews.get(view);
+
+            if (state == null) {
+                return;
+            }
+
+            // Ripple Color
+
+            int color = Color.parseColor(rippleColor);
+
+            ColorStateList colorState =
+                    ColorStateList.valueOf(color);
+
+            // Corner Radius DP থেকে Pixel
+
+            float radius = dp(Math.max(0, cornerRadiusDp));
+
+            // Ripple Mask
+
+            GradientDrawable mask = new GradientDrawable();
+
+            mask.setShape(GradientDrawable.RECTANGLE);
+
+            mask.setColor(Color.WHITE);
+
+            mask.setCornerRadius(radius);
+
+            // Original Background Content
+
+            Drawable original = state.originalBackground;
+
+            if (original == null) {
+
+                GradientDrawable transparent =
+                        new GradientDrawable();
+
+                transparent.setColor(Color.TRANSPARENT);
+
+                transparent.setCornerRadius(radius);
+
+                original = transparent;
+
+            }
+
+            // Ripple Drawable তৈরি
+
+            RippleDrawable rippleDrawable =
+                    new RippleDrawable(
+                        colorState,
+                        original,
+                        mask
+                    );
+
+            // View-তে Ripple বসানো
+
+            view.setBackground(rippleDrawable);
+
+            // আগের Padding বজায় রাখা
+
+            view.setPadding(
+                state.paddingLeft,
+                state.paddingTop,
+                state.paddingRight,
+                state.paddingBottom
+            );
+
+            // Arrangement-এর Touch Enable
+
+            view.setClickable(true);
+
+            RippleApplied("Ripple successfully applied");
+
+        } catch (Exception e) {
+
+            ErrorOccurred("SetRipple: " + e.getMessage());
+        }
+    }
+
+    // =====================================
+    // 3. Remove Ripple
+    // =====================================
+
+    @SimpleFunction(
+        description = "Remove Ripple and restore original background"
+    )
+
+    public void RemoveRipple(AndroidViewComponent component) {
+
+        try {
+
+            if (component == null) {
+
+                ErrorOccurred("RemoveRipple: Component is null");
+                return;
+            }
+
+            View view = component.getView();
+
+            RippleState state = rippleViews.get(view);
+
+            if (state == null) {
+
+                ErrorOccurred("RemoveRipple: View not registered");
+                return;
+            }
+
+            // Original Background Restore
+
+            view.setBackground(state.originalBackground);
+
+            // Original Padding Restore
+
+            view.setPadding(
+                state.paddingLeft,
+                state.paddingTop,
+                state.paddingRight,
+                state.paddingBottom
+            );
+
+            // Original Clickable State Restore
+
+            view.setClickable(state.originalClickable);
+
+            // Registration সরানো
+
+            rippleViews.remove(view);
+
+            RippleRemoved("Ripple successfully removed");
+
+        } catch (Exception e) {
+
+            ErrorOccurred("RemoveRipple: " + e.getMessage());
+        }
+    }
+
+    // =====================================
+    // 4. Check Ripple Applied
+    // =====================================
+
+    @SimpleFunction(
+        description = "Check whether Ripple is applied to a View"
+    )
+
+    public boolean IsRippleApplied(AndroidViewComponent component) {
+
+        if (component == null) {
+            return false;
         }
 
-        return sum;
+        View view = component.getView();
+
+        if (view == null) {
+            return false;
+        }
+
+        return rippleViews.containsKey(view)
+                && view.getBackground() instanceof RippleDrawable;
+    }
+
+    // =====================================
+    // 5. Clear All Registered Views
+    // =====================================
+
+    @SimpleFunction(
+        description = "Remove Ripple from all registered Views"
+    )
+
+    public void ClearAllRipples() {
+
+        try {
+
+            for (Map.Entry<View, RippleState> entry :
+                    rippleViews.entrySet()) {
+
+                View view = entry.getKey();
+
+                RippleState state = entry.getValue();
+
+                if (view != null && state != null) {
+
+                    view.setBackground(state.originalBackground);
+
+                    view.setPadding(
+                        state.paddingLeft,
+                        state.paddingTop,
+                        state.paddingRight,
+                        state.paddingBottom
+                    );
+
+                    view.setClickable(state.originalClickable);
+                }
+            }
+
+            rippleViews.clear();
+
+            AllRipplesCleared();
+
+        } catch (Exception e) {
+
+            ErrorOccurred("ClearAllRipples: " + e.getMessage());
+        }
+    }
+
+    // =====================================
+    // 6. View Registered Event
+    // =====================================
+
+    @SimpleEvent(
+        description = "When a View is registered"
+    )
+
+    public void ViewRegistered(String message) {
+
+        EventDispatcher.dispatchEvent(
+            this,
+            "ViewRegistered",
+            message
+        );
+    }
+
+    // =====================================
+    // 7. Ripple Applied Event
+    // =====================================
+
+    @SimpleEvent(
+        description = "When Ripple is applied"
+    )
+
+    public void RippleApplied(String message) {
+
+        EventDispatcher.dispatchEvent(
+            this,
+            "RippleApplied",
+            message
+        );
+    }
+
+    // =====================================
+    // 8. Ripple Removed Event
+    // =====================================
+
+    @SimpleEvent(
+        description = "When Ripple is removed"
+    )
+
+    public void RippleRemoved(String message) {
+
+        EventDispatcher.dispatchEvent(
+            this,
+            "RippleRemoved",
+            message
+        );
+    }
+
+    // =====================================
+    // 9. All Ripples Cleared Event
+    // =====================================
+
+    @SimpleEvent(
+        description = "When all Ripples are removed"
+    )
+
+    public void AllRipplesCleared() {
+
+        EventDispatcher.dispatchEvent(
+            this,
+            "AllRipplesCleared"
+        );
+    }
+
+    // =====================================
+    // 10. Error Event
+    // =====================================
+
+    @SimpleEvent(
+        description = "When an error occurs"
+    )
+
+    public void ErrorOccurred(String message) {
+
+        EventDispatcher.dispatchEvent(
+            this,
+            "ErrorOccurred",
+            message
+        );
+    }
+
+    // =====================================
+    // 11. DP to Pixel
+    // =====================================
+
+    private int dp(float value) {
+
+        return (int) (
+            value * context.getResources()
+                .getDisplayMetrics().density + 0.5f
+        );
     }
 }
